@@ -1,0 +1,156 @@
+/**
+ * Main application controller
+ *
+ * You can use this controller for your whole app if it is small
+ * or you can have separate controllers for each logical section
+ *
+ */
+;(function () {
+
+    angular
+        .module('projectAgmin')
+        .controller('MainController', MainController);
+
+    MainController.$inject = ['site.config', 'QueryService', '$rootScope', '$timeout', '$location', 'moment'];
+
+
+    function MainController(SiteConfig, QueryService, $rootScope, $timeout, $location, moment) {
+
+        // 'controller as' syntax
+        var self = this;
+        self.DefectsStats = [];
+        self.server = SiteConfig.SERVER;
+        self.today = new Date();
+        $rootScope.zoneData = [];
+        $rootScope.timePeriod = {
+            "15 Minutes": "15m", "30 Minutes": "30m",
+            "1 Hour": "1h", "2 Hours": "2h", "6 Hours": "6h", "12 Hours": "12h",
+            "Today": "today", "Week": "weekly", "15 Days": "15days",
+            "Month": "month", "2 Months": "2months", "3 Months": "3months"
+        };
+        $rootScope.selectedPeriod = "15m";
+        self.severityList = SiteConfig.SEVERITYLIST;
+        $rootScope.$emit('onLocationChangeSuccess', $location.$$path);
+
+
+        $rootScope.sensorData = {};
+        $rootScope.sensorsList = [];
+        $rootScope.zoneTableData = {};
+        $rootScope.zoneWiseSum = {};
+        $rootScope.sensorMap = {};
+
+        $rootScope.getSensorData = function () {
+            sort = {"sensorId": 1};
+            $rootScope.sensorsList = [];
+            data = {spec: {}, skip: 0, limit: 0, sort: sort};
+            QueryService.runQuery('GET', "api/sensor_list", data, undefined).then(function (resp) {
+                data = resp.data;
+                angular.forEach(data.output.data, function (sensor, index) {
+                    $rootScope.sensorData[sensor.sensorId] = sensor;
+                    $rootScope.sensorsList.push(sensor.sensorId);
+                    if (angular.isDefined(sensor.description) && sensor.description.length) {
+                        $rootScope.sensorMap[sensor.description] = sensor.sensorId
+
+                    } else {
+                        $rootScope.sensorMap[sensor.sensorId] = sensor.sensorId
+                    }
+
+
+                });
+                // $rootScope.sensorData = data.output.data;
+                // angular.forEach($rootScope.sensorData, function (sensor, index) {
+                //     $rootScope.sensorsList.push(sensor.sensorId)
+                // });
+                // console.log($rootScope.sensorsList);
+                $rootScope.sensorsList.sort();
+                $rootScope.sensorId = $rootScope.sensorsList[0];
+            })
+        };
+
+        $rootScope.getZoneWiseSensorData = function (selectedPeriod) {
+            url = 'api/graphs/dummy/getZonewiseTableData';
+            var params = {"period": selectedPeriod};
+            $rootScope.zoneWiseSum = {};
+            $rootScope.openSpinner();
+            QueryService.runQuery('POST', url, undefined, params).then(function (response) {
+                angular.forEach(response["data"]["output"], function (sensorData, zoneName) {
+                    if (angular.isUndefined($rootScope.zoneWiseSum[zoneName])) {
+                        $rootScope.zoneWiseSum[zoneName] = 0
+                    }
+                });
+                angular.forEach(response["data"]["output"], function (sensorData, zoneName) {
+                    angular.forEach(sensorData, function (sensor, index) {
+                        $rootScope.zoneWiseSum[zoneName] += parseInt(sensor.value)
+                    });
+                });
+                $rootScope.zoneTableData = response["data"]["output"];
+                console.log($rootScope.zoneTableData);
+            });
+            $rootScope.closeSpinner();
+        };
+
+        $rootScope.getZoneData = function () {
+            QueryService.runQuery('GET', 'api/zones', undefined, undefined).then(function(response){
+                $rootScope.zoneData = response.data.output.data;
+            });
+        };
+
+        $rootScope.getSensorGraph = function (selectedPeriod, sensorId, graphId) {
+            console.log(selectedPeriod);
+            var params = {"period": selectedPeriod, "sensorId": sensorId};
+            url = 'api/graphs/dummy/getGraph';
+            if (sensorId === 'zoneWise') {
+                url = 'api/graphs/dummy/getZoneWiseData'
+            }
+            QueryService.runQuery('POST', url, undefined, params).then(function (response) {
+                var Id = "testGraph";
+                var Title = "ZoneWide Graph";
+                if (sensorId !== "All" && sensorId !== "zoneWise") {
+                    Id = sensorId;
+                    Title = sensorId;
+                }
+                if (angular.isDefined(graphId)) {
+                    Id = graphId
+                }
+                $rootScope.zoneWiseSum = {};
+                var layout = {title: Title, showlegend: true, xaxis: {title: 'Time'}, yaxis: {title: 'Liters'}, legend: { yanchor: "bottom"}};
+                if (sensorId !== "All" && sensorId !== "zoneWise") {
+                    if (response["data"]["output"].length > 0) {
+                        layout["title"] = response["data"]["output"][0]["name"];
+                    }
+                    Plotly.newPlot(Id, response["data"]["output"], layout, {displayModeBar: false});
+                } else {
+                    Plotly.newPlot(Id, response["data"]["output"]['graph'], layout, {displayModeBar: false});
+                    tableData = response["data"]["output"]["table"];
+                    angular.forEach(response["data"]["output"]["table"], function (sensorData, zoneName) {
+                        if (angular.isUndefined($rootScope.zoneWiseSum[zoneName])) {
+                            $rootScope.zoneWiseSum[zoneName] = 0
+                        }
+                    });
+                    angular.forEach(response["data"]["output"]["table"], function (sensorData, zoneName) {
+                        angular.forEach(sensorData, function (sensor, index) {
+                            $rootScope.zoneWiseSum[zoneName] += parseInt(sensor.value)
+                        });
+                    });
+                    $rootScope.zoneTableData = response["data"]["output"]["table"];
+                }
+            });
+        };
+
+        $rootScope.getSensorsGraphs = function (selectedPeriod) {
+            console.log(selectedPeriod);
+            angular.forEach($rootScope.sensorData, function (sensor, index) {
+                // console.log(sensor.sensorId);
+                $rootScope.getSensorGraph(selectedPeriod, sensor.sensorId);
+            });
+        };
+
+        QueryService.queryDashboardData().then(function (response) {
+            $rootScope.getZoneData();
+            $rootScope.getZoneWiseSensorData($rootScope.selectedPeriod);
+            $rootScope.getSensorGraph($rootScope.selectedPeriod, "zoneWise");
+            // $(".main-wrapper .pushable").removeClass("loading");
+            $rootScope.getSensorData(0, 0);
+        });
+    }
+})();

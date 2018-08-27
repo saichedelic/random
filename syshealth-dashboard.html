@@ -1,0 +1,36 @@
+<br/>
+	
+<div class="ui segment">
+    <h2 align="center" class="header text-capitalize" style="background-color: #b1dfbb">Sensor Wise Report</h2>
+	<div class="card">
+		<div class="pull-right vert-offset-bottom-2">
+            <label> Time Period&nbsp;</label>
+            <div class="btn-group">
+                <span class="select-wraper">
+                    <select ng-model="selectedPeriod" title="Time Period" ng-options="value as key for (key, value) in timePeriod"
+                            class="form-control" ng-change="getSensorGraph(selectedPeriod, sensorId, 'Meter Graph')">
+                    </select>
+                </span>
+            </div>
+        </div>
+        <div class="pull-right vert-offset-bottom-2">
+            <label> Sensor ID&nbsp;</label>
+            <div class="btn-group">
+                <span class="select-wraper">
+                    <select ng-model="sensorId" title="Sensor ID" ng-options="value as key for (key, value) in sensorMap"
+                            class="form-control" ng-change="getSensorGraph(selectedPeriod, sensorId, 'Meter Graph')">
+                    </select>
+                </span>
+            </div>
+        </div>
+        <div class="col-sm-10 col-md-10 col-lg-10">
+            <div class="text-center">
+                <div class="card border-teal border-lighten-2">
+                    <div class="card-body">
+                        <div id="Meter Graph"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+	</div>
+</div>
